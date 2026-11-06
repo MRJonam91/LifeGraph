@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lifegraph.dev/schema.json",
+  "title": "LifeGraph Schema",
+  "description": "Deterministic personal knowledge & entity graph connecting persons, documents, contracts, and deadlines with cryptographic provenance.",
+  "type": "object",
+  "required": ["version", "namespace", "nodes", "edges"],
+  "properties": {
+    "version": { "type": "string" },
+    "namespace": { "type": "string" },
+    "title": { "type": "string" },
+    "description": { "type": "string" },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "updatedAt": { "type": "string", "format": "date-time" },
+    "nodes": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/LifeGraphNode" }
+    },
+    "edges": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/LifeGraphEdge" }
+    },
+    "metadata": { "type": "object" }
+  },
+  "$defs": {
+    "Provenance": {
+      "type": "object",
+      "required": ["source", "timestamp", "digest"],
+      "properties": {
+        "source": { "type": "string", "enum": ["user_input", "file_import", "verified_issuer", "agent_inferred", "migration"] },
+        "timestamp": { "type": "string" },
+        "author": { "type": "string" },
+        "digest": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+      }
+    },
+    "Permissions": {
+      "type": "object",
+      "required": ["visibility", "consentPurposes"],
+      "properties": {
+        "visibility": { "type": "string", "enum": ["private", "family", "confidential", "public"] },
+        "consentPurposes": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "encrypted": { "type": "boolean" },
+        "exportPolicy": { "type": "string", "enum": ["exportable", "redacted", "excluded"] }
+      }
+    },
+    "LifeGraphNode": {
+      "type": "object",
+      "required": ["id", "type", "label", "provenance", "permissions"],
+      "properties": {
+        "id": { "type": "string" },
+        "type": { "type": "string", "enum": ["person", "document", "contract", "deadline"] },
+        "label": { "type": "string" },
+        "tags": { "type": "array", "items": { "type": "string" } },
+        "provenance": { "$ref": "#/$defs/Provenance" },
+        "permissions": { "$ref": "#/$defs/Permissions" },
+        "metadata": { "type": "object" }
+      }
+    },
+    "LifeGraphEdge": {
+      "type": "object",
+      "required": ["id", "sourceId", "targetId", "predicate", "provenance", "permissions"],
+      "properties": {
+        "id": { "type": "string" },
+        "sourceId": { "type": "string" },
+        "targetId": { "type": "string" },
+        "predicate": { "type": "string" },
+        "provenance": { "$ref": "#/$defs/Provenance" },
+        "permissions": { "$ref": "#/$defs/Permissions" },
+        "validFrom": { "type": "string" },
+        "validTo": { "type": "string" },
+        "metadata": { "type": "object" }
+      }
+    }
+  }
+}

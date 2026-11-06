@@ -24,6 +24,9 @@ export function evaluateDeadlineTime(
 ): { urgency: 'overdue' | 'due_soon' | 'upcoming'; daysRemaining: number } {
   const due = new Date(dueDateStr);
   const now = new Date(referenceDate);
+  if (isNaN(due.getTime())) {
+    return { urgency: 'overdue', daysRemaining: 0 };
+  }
   // Compare at day granularity
   const msPerDay = 1000 * 60 * 60 * 24;
   const daysRemaining = Math.ceil((due.getTime() - now.getTime()) / msPerDay);

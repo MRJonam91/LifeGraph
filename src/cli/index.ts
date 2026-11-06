@@ -110,6 +110,8 @@ function parseArgs(args: string[]): {
       flags['type'] = args[++i] ?? '';
     } else if (arg === '-s' || arg === '--search') {
       flags['search'] = args[++i] ?? '';
+    } else if (arg === '--tag') {
+      flags['tag'] = args[++i] ?? '';
     } else if (arg === '-d' || arg === '--days') {
       flags['days'] = args[++i] ?? '';
     } else if (arg === '-p' || arg === '--pass' || arg === '--passphrase') {
@@ -136,12 +138,17 @@ function parseArgs(args: string[]): {
 }
 
 function loadGraph(filePath: string): LifeGraph {
-  const absPath = resolve(process.cwd(), filePath);
-  if (!existsSync(absPath)) {
-    console.error(`Error: File not found: ${filePath}`);
-    process.exit(1);
+  let raw: string;
+  if (filePath === '-') {
+    raw = readFileSync(0, 'utf-8');
+  } else {
+    const absPath = resolve(process.cwd(), filePath);
+    if (!existsSync(absPath)) {
+      console.error(`Error: File not found: ${filePath}`);
+      process.exit(1);
+    }
+    raw = readFileSync(absPath, 'utf-8');
   }
-  const raw = readFileSync(absPath, 'utf-8');
   try {
     return importCanonicalJson(raw);
   } catch (err) {
@@ -198,7 +205,7 @@ export function runCli(argv: string[] = process.argv.slice(2)): void {
     }
 
     case 'sample': {
-      const dest = positionals[0] ?? 'lifegraph-sample.json';
+      const dest = (flags['out'] as string) || positionals[0] || 'lifegraph-sample.json';
       const sample = createSampleLifeGraphData();
       const graph = new LifeGraph(sample);
       const canonical = exportCanonicalJson(graph);
@@ -214,12 +221,17 @@ export function runCli(argv: string[] = process.argv.slice(2)): void {
         console.error('Usage: lifegraph validate <file.json>');
         process.exit(1);
       }
-      const absPath = resolve(process.cwd(), targetFile);
-      if (!existsSync(absPath)) {
-        console.error(`Error: File not found: ${targetFile}`);
-        process.exit(1);
+      let raw: string;
+      if (targetFile === '-') {
+        raw = readFileSync(0, 'utf-8');
+      } else {
+        const absPath = resolve(process.cwd(), targetFile);
+        if (!existsSync(absPath)) {
+          console.error(`Error: File not found: ${targetFile}`);
+          process.exit(1);
+        }
+        raw = readFileSync(absPath, 'utf-8');
       }
-      const raw = readFileSync(absPath, 'utf-8');
       let parsed: unknown;
       try {
         parsed = JSON.parse(raw);
@@ -549,10 +561,12 @@ export function runCli(argv: string[] = process.argv.slice(2)): void {
       const graph = loadGraph(targetFile);
       const typeFilter = flags['type'] as EntityType | undefined;
       const search = flags['search'] as string | undefined;
+      const tagFilter = flags['tag'] ? [String(flags['tag'])] : undefined;
 
       const results = graph.query({
         type: typeFilter,
         search,
+        tags: tagFilter,
       });
 
       console.log(`Query returned ${results.length} node(s):`);

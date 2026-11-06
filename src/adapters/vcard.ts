@@ -5,8 +5,9 @@ import { computeEntityDigest } from '../core/crypto.ts';
 import type { PersonNode } from '../core/types.ts';
 
 export function importVCard(vcardText: string): PersonNode[] {
+  const unfolded = vcardText.replace(/\r?\n[ \t]/g, '');
   const persons: PersonNode[] = [];
-  const cards = vcardText.split(/BEGIN:VCARD/i).slice(1);
+  const cards = unfolded.split(/BEGIN:VCARD/i).slice(1);
 
   let counter = 1;
   const now = new Date().toISOString();
@@ -72,4 +73,24 @@ export function importVCard(vcardText: string): PersonNode[] {
   }
 
   return persons;
+}
+
+export function exportVCard(persons: PersonNode[]): string {
+  const cards: string[] = [];
+  for (const person of persons) {
+    const displayName = person.name || person.label;
+    const lines = [
+      'BEGIN:VCARD',
+      'VERSION:3.0',
+      `FN:${displayName}`,
+      `N:${displayName};;;;`,
+    ];
+    if (person.email) lines.push(`EMAIL;TYPE=INTERNET:${person.email}`);
+    if (person.phone) lines.push(`TEL;TYPE=CELL:${person.phone}`);
+    if (person.dateOfBirth) lines.push(`BDAY:${person.dateOfBirth}`);
+    if (person.address) lines.push(`ADR;TYPE=HOME:;;${person.address};;;`);
+    lines.push('END:VCARD');
+    cards.push(lines.join('\r\n'));
+  }
+  return cards.join('\r\n\r\n');
 }

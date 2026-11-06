@@ -3,7 +3,7 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { importVCard } from '../src/adapters/vcard.ts';
+import { importVCard, exportVCard } from '../src/adapters/vcard.ts';
 import { importSubscriptionsCsv } from '../src/adapters/subscriptions-csv.ts';
 import { importIcsDeadlines } from '../src/adapters/ical-import.ts';
 
@@ -63,4 +63,44 @@ END:VCALENDAR`;
   assert.equal(dl.dueDate, '2027-05-20');
   assert.equal(dl.actionRequired, 'Portare fototessera e marca da bollo');
   assert.equal(dl.status, 'pending');
+});
+
+test('Adapters - vCard unfolds long wrapped lines and supports exportVCard', () => {
+  const foldedCard = `BEGIN:VCARD
+VERSION:3.0
+FN:Marco
+  Rossi
+EMAIL:marco.
+ rossi@example.com
+TEL:+39 333
+ 1122334
+ADR:;;Via Roma
+  12;Milano;MI;20121;Italia
+END:VCARD`;
+
+  const persons = importVCard(foldedCard);
+  assert.equal(persons.length, 1);
+  assert.equal(persons[0]!.name, 'Marco Rossi');
+  assert.equal(persons[0]!.email, 'marco.rossi@example.com');
+  assert.equal(persons[0]!.phone, '+39 3331122334');
+  assert.ok(persons[0]!.address?.includes('Via Roma 12'));
+
+  const exported = exportVCard(persons);
+  assert.ok(exported.includes('BEGIN:VCARD'));
+  assert.ok(exported.includes('FN:Marco Rossi'));
+  assert.ok(exported.includes('EMAIL;TYPE=INTERNET:marco.rossi@example.com'));
+});
+
+test('Adapters - CSV subscriptions handles semicolon delimiters and European decimal commas', () => {
+  const semiCsv = `fornitore;importo;ciclo;categoria
+Palestra Virgin;65,50;monthly;wellness
+Telepass Family;3,90;monthly;transport`;
+
+  const contracts = importSubscriptionsCsv(semiCsv);
+  assert.equal(contracts.length, 2);
+  assert.equal(contracts[0]!.provider, 'Palestra Virgin');
+  assert.equal(contracts[0]!.amount, 65.5);
+  assert.equal(contracts[0]!.billingCycle, 'monthly');
+  assert.equal(contracts[1]!.provider, 'Telepass Family');
+  assert.equal(contracts[1]!.amount, 3.9);
 });

@@ -4,7 +4,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { writeFileSync, unlinkSync, existsSync } from 'node:fs';
+import { writeFileSync, readFileSync, unlinkSync, existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 const CLI_PATH = resolve(process.cwd(), 'dist/cli/index.js');
@@ -12,6 +12,19 @@ const CLI_PATH = resolve(process.cwd(), 'dist/cli/index.js');
 function runCliCmd(args: string[]): { stdout: string; status: number } {
   try {
     const stdout = execFileSync(process.execPath, [CLI_PATH, ...args], {
+      encoding: 'utf-8',
+      env: { ...process.env, NO_SPONSOR: '1' },
+    });
+    return { stdout, status: 0 };
+  } catch (err: any) {
+    return { stdout: (err.stdout ?? '') + (err.stderr ?? ''), status: err.status ?? 1 };
+  }
+}
+
+function runCliCmdWithInput(args: string[], input: string): { stdout: string; status: number } {
+  try {
+    const stdout = execFileSync(process.execPath, [CLI_PATH, ...args], {
+      input,
       encoding: 'utf-8',
       env: { ...process.env, NO_SPONSOR: '1' },
     });
@@ -152,5 +165,30 @@ test('CLI - sample, validate, inspect, and export cycle', () => {
   } finally {
     if (existsSync(tmpFile)) unlinkSync(tmpFile);
     if (existsSync(tmpHtml)) unlinkSync(tmpHtml);
+  }
+});
+
+test('CLI - supports query with --tag, sample with -o, and reading ledger from stdin', () => {
+  const tmpOut = resolve(process.cwd(), 'temp-sample-flag.json');
+
+  try {
+    // 1. Test sample with -o flag
+    const sampleRes = runCliCmd(['sample', '-o', tmpOut]);
+    assert.equal(sampleRes.status, 0);
+    assert.ok(existsSync(tmpOut));
+
+    // 2. Test query with --tag flag
+    const queryTagRes = runCliCmd(['query', tmpOut, '--tag', 'identity']);
+    assert.equal(queryTagRes.status, 0);
+    assert.ok(queryTagRes.stdout.includes('Query returned'));
+    assert.ok(queryTagRes.stdout.includes('doc-cie-mario'));
+
+    // 3. Test validate via stdin (-)
+    const jsonContent = readFileSync(tmpOut, 'utf-8');
+    const stdinValRes = runCliCmdWithInput(['validate', '-'], jsonContent);
+    assert.equal(stdinValRes.status, 0);
+    assert.ok(stdinValRes.stdout.includes('100% valid'));
+  } finally {
+    if (existsSync(tmpOut)) unlinkSync(tmpOut);
   }
 });

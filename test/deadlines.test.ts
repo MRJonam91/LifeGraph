@@ -56,3 +56,14 @@ test('Deadlines - autoSynthesizeDeadlines extracts contract and document obligat
   assert.ok(contractNotice);
   assert.equal(contractNotice.targetEntityId, 'ctr-rent-home');
 });
+
+test('Deadlines - evaluateDeadlineTime handles invalid or unparseable dates safely', () => {
+  const refDate = new Date('2026-11-06T12:00:00Z');
+  const invalidRes = evaluateDeadlineTime('not-a-valid-date', 30, refDate);
+  assert.equal(invalidRes.urgency, 'overdue');
+  assert.equal(invalidRes.daysRemaining, 0);
+
+  const emptyRes = evaluateDeadlineTime('', 30, refDate);
+  assert.equal(emptyRes.urgency, 'overdue');
+  assert.equal(emptyRes.daysRemaining, 0);
+});

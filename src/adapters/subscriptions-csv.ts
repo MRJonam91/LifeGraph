@@ -8,10 +8,12 @@ export function importSubscriptionsCsv(csvContent: string): ContractNode[] {
   const lines = csvContent.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
   if (lines.length < 2) return [];
 
-  const headers = parseCsvLine(lines[0]!).map((h) => h.toLowerCase());
-  const providerIdx = headers.findIndex((h) => h.includes('provider') || h.includes('service') || h.includes('name') || h.includes('nome'));
-  const amountIdx = headers.findIndex((h) => h.includes('amount') || h.includes('cost') || h.includes('prezzo') || h.includes('importo'));
-  const cycleIdx = headers.findIndex((h) => h.includes('cycle') || h.includes('frequency') || h.includes('frequenza'));
+  const firstLine = lines[0]!;
+  const delimiter = firstLine.includes(';') && (!firstLine.includes(',') || firstLine.split(';').length > firstLine.split(',').length) ? ';' : ',';
+  const headers = parseCsvLine(firstLine, delimiter).map((h) => h.toLowerCase());
+  const providerIdx = headers.findIndex((h) => h.includes('provider') || h.includes('service') || h.includes('name') || h.includes('nome') || h.includes('fornitore'));
+  const amountIdx = headers.findIndex((h) => h.includes('amount') || h.includes('cost') || h.includes('prezzo') || h.includes('importo') || h.includes('canone'));
+  const cycleIdx = headers.findIndex((h) => h.includes('cycle') || h.includes('frequency') || h.includes('frequenza') || h.includes('periodicità'));
   const categoryIdx = headers.findIndex((h) => h.includes('category') || h.includes('categoria') || h.includes('tipo'));
 
   if (providerIdx === -1) {
@@ -23,13 +25,13 @@ export function importSubscriptionsCsv(csvContent: string): ContractNode[] {
   let count = 1;
 
   for (let i = 1; i < lines.length; i++) {
-    const cols = parseCsvLine(lines[i]!);
+    const cols = parseCsvLine(lines[i]!, delimiter);
     const provider = cols[providerIdx]?.trim();
     if (!provider) continue;
 
     let amount: number | undefined;
     if (amountIdx !== -1 && cols[amountIdx]) {
-      const parsedAmount = parseFloat(cols[amountIdx]!.replace(/[€$,]/g, (m) => (m === ',' ? '.' : '')));
+      const parsedAmount = parseFloat(cols[amountIdx]!.replace(/[€$]/g, '').replace(/,/g, '.').trim());
       if (!isNaN(parsedAmount)) amount = parsedAmount;
     }
 
@@ -82,7 +84,7 @@ export function importSubscriptionsCsv(csvContent: string): ContractNode[] {
   return contracts;
 }
 
-function parseCsvLine(line: string): string[] {
+function parseCsvLine(line: string, delimiter = ','): string[] {
   const result: string[] = [];
   let current = '';
   let inQuotes = false;
@@ -91,7 +93,7 @@ function parseCsvLine(line: string): string[] {
     const char = line[i]!;
     if (char === '"') {
       inQuotes = !inQuotes;
-    } else if (char === ',' && !inQuotes) {
+    } else if (char === delimiter && !inQuotes) {
       result.push(current.trim());
       current = '';
     } else {

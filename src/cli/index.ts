@@ -15,14 +15,17 @@ import { validateLifeGraph } from '../core/validator.ts';
 import { computeGraphStats } from '../core/stats.ts';
 import { getEvaluatedDeadlines } from '../core/deadlines.ts';
 import { computeGraphDiff } from '../core/diff.ts';
+import { auditLifeGraph } from '../core/audit.ts';
+import { mergeLifeGraphs } from '../core/merge.ts';
 import { exportCanonicalJson, importCanonicalJson } from '../exporters/canonical-json.ts';
 import { exportJsonLd } from '../exporters/jsonld.ts';
 import { exportMarkdown } from '../exporters/markdown.ts';
 import { exportIcs } from '../exporters/ical.ts';
 import { exportHtml } from '../exporters/html.ts';
 import { exportNodesCsv, exportEdgesCsv, exportDeadlinesCsv } from '../exporters/csv.ts';
+import { exportDot } from '../exporters/dot.ts';
 import { createSampleLifeGraphData } from '../sample.ts';
-import type { EntityType } from '../core/types.ts';
+import type { EntityType, MergeStrategy } from '../core/types.ts';
 
 const HELP_TEXT = `LifeGraph CLI — v${LIFEGRAPH_SCHEMA_VERSION}
 Deterministic personal knowledge graph connecting entities, contracts, and deadlines.
@@ -36,21 +39,26 @@ COMMANDS:
   validate <file>                Validate schema, referential integrity, and cryptographic digests
   inspect <file>                 Show detailed summary and entity statistics
   stats <file>                   Alias for 'inspect'
+  audit <file>                   Run privacy hygiene & paperwork completeness audit
+  trace <file> <nodeId>          Trace upstream and downstream dependency lineage
   deadlines <file> [--days N]    List impending and overdue deadlines (default: 60 days)
   query <file> [options]         Search entities by type, tag, or label keyword
   filter <file> --consent <p>    Export a consent-restricted subgraph
   anonymize <file> [--out <f>]   Sanitize PII while preserving relational topology
-  export <file> --format <fmt>   Export to json, jsonld, markdown, ics, html, or csv
+  merge <fileA> <fileB>          Reconcile & merge two LifeGraph ledgers
+  export <file> --format <fmt>   Export to json, jsonld, markdown, ics, html, csv, or dot
   diff <fileA> <fileB>           Compare two LifeGraph snapshot files
   sponsor                        Show sponsorship and donation channels
 
 OPTIONS:
-  -f, --format <fmt>             Target export format: json | jsonld | markdown | ics | html | csv
+  -f, --format <fmt>             Target export format: json | jsonld | markdown | ics | html | csv | dot
   -o, --out <path>               Write output to file instead of stdout
   -c, --consent <purpose>        Consent purpose filter (e.g. general_admin, tax_filing, banking_kyc)
   -t, --type <type>              Filter query by entity type: person | document | contract | deadline
   -s, --search <keyword>         Search query string
   -d, --days <number>            Lookahead days for deadlines (default: 60)
+  --strategy <strategy>          Merge conflict strategy: prefer-newer | prefer-incoming | prefer-base
+  --strict                       Exit with code 1 if audit warnings/critical issues exist
   --all                          Include completed/dismissed deadlines
   --no-digests                   Skip SHA-256 digest recalculation during validation
   -v, --version                  Print version
@@ -77,6 +85,8 @@ function parseArgs(args: string[]): {
       flags['version'] = true;
     } else if (arg === '--all') {
       flags['all'] = true;
+    } else if (arg === '--strict') {
+      flags['strict'] = true;
     } else if (arg === '--no-digests') {
       flags['no-digests'] = true;
     } else if (arg === '-f' || arg === '--format') {
@@ -91,6 +101,8 @@ function parseArgs(args: string[]): {
       flags['search'] = args[++i] ?? '';
     } else if (arg === '-d' || arg === '--days') {
       flags['days'] = args[++i] ?? '';
+    } else if (arg === '--strategy') {
+      flags['strategy'] = args[++i] ?? '';
     } else if (arg.startsWith('--')) {
       const key = arg.slice(2);
       flags[key] = true;
@@ -260,6 +272,102 @@ export function runCli(argv: string[] = process.argv.slice(2)): void {
       break;
     }
 
+    case 'audit': {
+      const targetFile = positionals[0];
+      if (!targetFile) {
+        console.error('Usage: lifegraph audit <file.json> [--strict]');
+        process.exit(1);
+      }
+      const graph = loadGraph(targetFile);
+      const audit = auditLifeGraph(graph);
+
+      const color =
+        audit.healthScore >= 80 ? '\x1b[32m' : audit.healthScore >= 50 ? '\x1b[33m' : '\x1b[31m';
+      console.log(`\x1b[1m=== LifeGraph Hygiene & Completeness Audit ===\x1b[0m`);
+      console.log(`Health Score:             ${color}${audit.healthScore}%\x1b[0m`);
+      console.log(`Orphan Entities:          ${audit.orphanCount}`);
+      console.log(`Unprotected Expirations:  ${audit.unprotectedExpirationsCount}`);
+      console.log(`Public PII Risks:         ${audit.privacyRiskCount}`);
+
+      if (audit.issues.length > 0) {
+        console.log(`\nIssues detected (${audit.issues.length}):`);
+        for (const iss of audit.issues) {
+          const badge =
+            iss.severity === 'critical'
+              ? '\x1b[31m[CRITICAL]\x1b[0m'
+              : iss.severity === 'warning'
+              ? '\x1b[33m[WARNING]\x1b[0m'
+              : '\x1b[36m[INFO]\x1b[0m';
+          console.log(` ${badge} (${iss.code}): ${iss.message}`);
+          console.log(`    ↳ Recommendation: ${iss.recommendation}`);
+        }
+      } else {
+        console.log(`\x1b[32m✔ No hygiene or privacy issues found.\x1b[0m`);
+      }
+
+      if (flags['strict'] && (audit.privacyRiskCount > 0 || audit.healthScore < 70)) {
+        process.exit(1);
+      }
+      break;
+    }
+
+    case 'trace': {
+      const targetFile = positionals[0];
+      const targetId = positionals[1];
+      if (!targetFile || !targetId) {
+        console.error('Usage: lifegraph trace <file.json> <nodeId>');
+        process.exit(1);
+      }
+      const graph = loadGraph(targetFile);
+      const lineage = graph.findLineage(targetId);
+
+      console.log(`\x1b[1m=== Relational Lineage for: ${lineage.targetNode.label} (${lineage.targetNode.id}) ===\x1b[0m`);
+      console.log(`Type:       ${lineage.targetNode.type}`);
+      console.log(`Visibility: ${lineage.targetNode.permissions.visibility}`);
+
+      console.log(`\n⬆ Upstream Dependencies (${lineage.upstream.length}):`);
+      if (lineage.upstream.length === 0) console.log('  (none)');
+      for (const up of lineage.upstream) {
+        console.log(`  • [${up.type.toUpperCase()}] ${up.label} (${up.id})`);
+      }
+
+      console.log(`\n⬇ Downstream Consequences (${lineage.downstream.length}):`);
+      if (lineage.downstream.length === 0) console.log('  (none)');
+      for (const down of lineage.downstream) {
+        console.log(`  • [${down.type.toUpperCase()}] ${down.label} (${down.id})`);
+      }
+      break;
+    }
+
+    case 'merge': {
+      const fileA = positionals[0];
+      const fileB = positionals[1];
+      if (!fileA || !fileB) {
+        console.error('Usage: lifegraph merge <fileA.json> <fileB.json> [--strategy <prefer-newer|prefer-incoming|prefer-base>] [--out <dest>]');
+        process.exit(1);
+      }
+      const graphA = loadGraph(fileA);
+      const graphB = loadGraph(fileB);
+      const strategy = (flags['strategy'] as MergeStrategy) || 'prefer-newer';
+
+      const result = mergeLifeGraphs(graphA, graphB, { strategy });
+      const mergedGraph = new LifeGraph(result.graph);
+      const output = exportCanonicalJson(mergedGraph);
+
+      console.log(`\x1b[1m=== Merge Results (Strategy: ${strategy}) ===\x1b[0m`);
+      console.log(`Added Nodes:    ${result.addedNodes.length}`);
+      console.log(`Updated Nodes:  ${result.updatedNodes.length}`);
+      console.log(`Skipped Nodes:  ${result.skippedNodes.length}`);
+      console.log(`Added Edges:    ${result.addedEdges.length}`);
+      console.log(`Conflicts:      ${result.conflicts.length}`);
+      for (const c of result.conflicts) {
+        console.log(`  ⚠ ${c.id}: ${c.message} -> ${c.resolution}`);
+      }
+
+      writeOutput(output, flags['out'] as string | undefined);
+      break;
+    }
+
     case 'deadlines': {
       const targetFile = positionals[0];
       if (!targetFile) {
@@ -352,7 +460,7 @@ export function runCli(argv: string[] = process.argv.slice(2)): void {
       const targetFile = positionals[0];
       const format = (flags['format'] as string) ?? 'json';
       if (!targetFile) {
-        console.error('Usage: lifegraph export <file.json> --format <json|jsonld|markdown|ics|html|csv> [--out <file>]');
+        console.error('Usage: lifegraph export <file.json> --format <json|jsonld|markdown|ics|html|csv|dot> [--out <file>]');
         process.exit(1);
       }
       const graph = loadGraph(targetFile);
@@ -376,6 +484,10 @@ export function runCli(argv: string[] = process.argv.slice(2)): void {
         case 'html':
           output = exportHtml(graph);
           break;
+        case 'dot':
+        case 'graphviz':
+          output = exportDot(graph);
+          break;
         case 'csv':
         case 'csv-nodes':
           output = exportNodesCsv(graph);
@@ -387,7 +499,7 @@ export function runCli(argv: string[] = process.argv.slice(2)): void {
           output = exportDeadlinesCsv(graph);
           break;
         default:
-          console.error(`Error: Unknown format '${format}'. Available: json, jsonld, markdown, ics, html, csv`);
+          console.error(`Error: Unknown format '${format}'. Available: json, jsonld, markdown, ics, html, csv, dot`);
           process.exit(1);
       }
 
@@ -442,7 +554,7 @@ const isDirectRun =
   (resolve(process.argv[1]) === resolve(import.meta.filename ?? '') ||
     process.argv[1].endsWith('lifegraph') ||
     process.argv[1].endsWith('index.ts') ||
-    process.argv[1].endsWith('index.ts'));
+    process.argv[1].endsWith('index.js'));
 
 if (isDirectRun) {
   runCli();

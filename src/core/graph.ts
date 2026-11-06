@@ -188,6 +188,122 @@ export class LifeGraph {
     return neighbors;
   }
 
+  public getConnectedComponent(nodeId: string): { nodes: LifeGraphNode[]; edges: LifeGraphEdge[] } {
+    const startNode = this.nodesMap.get(nodeId);
+    if (!startNode) return { nodes: [], edges: [] };
+
+    const visitedNodes = new Set<string>([nodeId]);
+    const visitedEdges = new Set<string>();
+    const queue: string[] = [nodeId];
+
+    while (queue.length > 0) {
+      const current = queue.shift()!;
+      const outgoing = this.getOutgoingEdges(current);
+      for (const edge of outgoing) {
+        visitedEdges.add(edge.id);
+        if (!visitedNodes.has(edge.targetId)) {
+          visitedNodes.add(edge.targetId);
+          queue.push(edge.targetId);
+        }
+      }
+      const incoming = this.getIncomingEdges(current);
+      for (const edge of incoming) {
+        visitedEdges.add(edge.id);
+        if (!visitedNodes.has(edge.sourceId)) {
+          visitedNodes.add(edge.sourceId);
+          queue.push(edge.sourceId);
+        }
+      }
+    }
+
+    const nodes = Array.from(visitedNodes).map((id) => this.nodesMap.get(id)!).filter(Boolean);
+    const edges = Array.from(visitedEdges).map((id) => this.edgesMap.get(id)!).filter(Boolean);
+    return { nodes, edges };
+  }
+
+  public findLineage(nodeId: string, maxDepth = 10): { targetNode: LifeGraphNode; upstream: LifeGraphNode[]; downstream: LifeGraphNode[]; edges: LifeGraphEdge[] } {
+    const targetNode = this.nodesMap.get(nodeId);
+    if (!targetNode) {
+      throw new Error(`Node '${nodeId}' not found.`);
+    }
+
+    const upstreamIds = new Set<string>();
+    const downstreamIds = new Set<string>();
+    const traversedEdges = new Set<string>();
+
+    // Trace upstream (incoming paths)
+    const traceUp = (currId: string, depth: number) => {
+      if (depth >= maxDepth) return;
+      for (const edge of this.getIncomingEdges(currId)) {
+        traversedEdges.add(edge.id);
+        if (!upstreamIds.has(edge.sourceId) && edge.sourceId !== nodeId) {
+          upstreamIds.add(edge.sourceId);
+          traceUp(edge.sourceId, depth + 1);
+        }
+      }
+    };
+
+    // Trace downstream (outgoing paths)
+    const traceDown = (currId: string, depth: number) => {
+      if (depth >= maxDepth) return;
+      for (const edge of this.getOutgoingEdges(currId)) {
+        traversedEdges.add(edge.id);
+        if (!downstreamIds.has(edge.targetId) && edge.targetId !== nodeId) {
+          downstreamIds.add(edge.targetId);
+          traceDown(edge.targetId, depth + 1);
+        }
+      }
+    };
+
+    traceUp(nodeId, 0);
+    traceDown(nodeId, 0);
+
+    const upstream = Array.from(upstreamIds).map((id) => this.nodesMap.get(id)!).filter(Boolean);
+    const downstream = Array.from(downstreamIds).map((id) => this.nodesMap.get(id)!).filter(Boolean);
+    const edges = Array.from(traversedEdges).map((id) => this.edgesMap.get(id)!).filter(Boolean);
+
+    return { targetNode, upstream, downstream, edges };
+  }
+
+  public detectCycles(predicates?: string[]): string[][] {
+    const cycles: string[][] = [];
+    const visited = new Set<string>();
+    const recStack = new Set<string>();
+    const path: string[] = [];
+
+    const dfs = (nodeId: string) => {
+      visited.add(nodeId);
+      recStack.add(nodeId);
+      path.push(nodeId);
+
+      const outEdges = this.getOutgoingEdges(nodeId).filter(
+        (e) => !predicates || predicates.includes(e.predicate)
+      );
+
+      for (const edge of outEdges) {
+        if (!visited.has(edge.targetId)) {
+          dfs(edge.targetId);
+        } else if (recStack.has(edge.targetId)) {
+          const cycleStartIdx = path.indexOf(edge.targetId);
+          if (cycleStartIdx !== -1) {
+            cycles.push([...path.slice(cycleStartIdx), edge.targetId]);
+          }
+        }
+      }
+
+      path.pop();
+      recStack.delete(nodeId);
+    };
+
+    for (const node of this.getNodes()) {
+      if (!visited.has(node.id)) {
+        dfs(node.id);
+      }
+    }
+
+    return cycles;
+  }
+
   public query(filter: GraphQueryFilter): LifeGraphNode[] {
     return this.getNodes().filter((node) => {
       if (filter.type && node.type !== filter.type) return false;

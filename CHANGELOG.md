@@ -6,6 +6,28 @@ Il formato è basato su [Keep a Changelog](https://keepachangelog.com/it/1.1.0/)
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.1.0-alpha.1] - 2026-11-06
+
+### Added
+- **Lineage Tracing & Graph Traversal**:
+  - `findLineage(nodeId)`: Traces upstream dependencies (incoming paths) and downstream consequences (outgoing triggers).
+  - `getConnectedComponent(nodeId)`: BFS traversal discovering full cluster of connected entities.
+  - `detectCycles(predicates)`: Identifies cycles in directed relationships.
+- **Paperwork & Privacy Hygiene Auditor**:
+  - `auditLifeGraph`: Evaluates overall health score (0–100%) and categorizes critical PII leaks, orphan documents/contracts, and unprotected contract/document expirations.
+- **Deterministic Ledger Reconciler & Merge Engine**:
+  - `mergeLifeGraphs`: Reconciles two independent ledgers with strategies (`prefer-newer`, `prefer-incoming`, `prefer-base`) and recomputes digests.
+- **Graphviz DOT Exporter**:
+  - `exportDot`: Generates styled `.dot` graphs with color-coded nodes by entity type.
+- **CLI Enhancements**:
+  - `lifegraph audit <file> [--strict]`: Evaluates privacy risks and exits 1 on critical issues.
+  - `lifegraph trace <file> <nodeId>`: Visualizes upstream and downstream lineage.
+  - `lifegraph merge <fileA> <fileB> [--strategy <str>] [--out <dest>]`: Deterministic merge.
+- **HTML Dashboard Upgrades**:
+  - Live client-side interactive search/filter and health score metric.
+- **Expanded Test Coverage**:
+  - 35 automated unit and integration tests across 9 test suites.
+
 ## [1.0.0] - 2026-11-06
 
 ### Added

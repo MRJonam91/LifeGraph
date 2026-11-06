@@ -9,6 +9,8 @@ export * from './core/validator.ts';
 export * from './core/deadlines.ts';
 export * from './core/diff.ts';
 export * from './core/stats.ts';
+export * from './core/audit.ts';
+export * from './core/merge.ts';
 
 export * from './exporters/canonical-json.ts';
 export * from './exporters/jsonld.ts';
@@ -16,5 +18,6 @@ export * from './exporters/markdown.ts';
 export * from './exporters/ical.ts';
 export * from './exporters/html.ts';
 export * from './exporters/csv.ts';
+export * from './exporters/dot.ts';
 
 export * from './sample.ts';

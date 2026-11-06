@@ -15,6 +15,7 @@ LifeGraph is a deterministic, portable entity and knowledge graph for personal p
                       │          LifeGraph Graph Engine        │
                       │   - In-memory Property Graph Index     │
                       │   - Referential Integrity Validator    │
+                      │   - Lineage Tracing & Cycle Detector   │
                       │   - SHA-256 Tamper Detection           │
                       └───────────────────┬────────────────────┘
                                           │
@@ -22,9 +23,9 @@ LifeGraph is a deterministic, portable entity and knowledge graph for personal p
          │                  │                    │                  │
          ▼                  ▼                    ▼                  ▼
 ┌──────────────────┐┌──────────────────┐┌──────────────────┐┌──────────────────┐
-│  W3C JSON-LD     ││  Markdown &      ││  RFC 5545 iCal   ││  HTML & CSV      │
-│  (Schema.org +   ││  Mermaid Graph   ││  (Native Sync +  ││  (Visual Audit & │
-│  PROV-O Lineage) ││  Relationship)   ││  Calendar Alarm) ││  Spreadsheets)   │
+│  W3C JSON-LD     ││  Markdown &      ││  RFC 5545 iCal   ││  HTML, CSV &    │
+│  (Schema.org +   ││  Mermaid Graph   ││  (Native Sync +  ││  Graphviz DOT   │
+│  PROV-O Lineage) ││  Relationship)   ││  Calendar Alarm) ││  (Auditing)     │
 └──────────────────┘└──────────────────┘└──────────────────┘└──────────────────┘
 ```
 
@@ -36,7 +37,7 @@ LifeGraph is a deterministic, portable entity and knowledge graph for personal p
      - `DocumentNode`: ID cards, passports, driving licenses, tax filings, diplomas, with file hashes and expiry.
      - `ContractNode`: Employment, rentals, utility power/gas, telecoms, insurance, notice windows, and recurring costs.
      - `DeadlineNode`: Actionable obligations (renewal windows, document expirations, tax due dates) with reminders.
-     - `LifeGraphEdge`: Directed relationships (`OWNS`, `ISSUED_TO`, `PARTY_TO`, `EXPIRES_ON`, `RENEWAL_OF`, `DEPENDS_ON`, `ATTACHED_TO`).
+     - `LifeGraphEdge`: Directed relationships (`OWNS`, `PARTY_TO`, `ATTACHED_TO`, `EXPIRES_ON`, `RENEWAL_OF`, `DEPENDS_ON`).
      - `Provenance`: Source lineage (`user_input`, `verified_issuer`, `file_import`, `agent_inferred`), ISO timestamp, and SHA-256 cryptographic digest.
      - `Permissions`: Visibility classification (`private`, `family`, `confidential`, `public`) and consent purpose limitations.
 
@@ -44,6 +45,8 @@ LifeGraph is a deterministic, portable entity and knowledge graph for personal p
    - Directed property graph implementation with adjacency indexing.
    - Referential integrity checks preventing orphaned or dangling edges.
    - Purpose limitation projection (`projectByConsent`): extracts subgraphs authorized under a specific consent purpose (e.g., `banking_kyc`, `tax_filing`).
+   - Lineage tracing (`findLineage`): separates upstream requirements and downstream consequences.
+   - Connected component discovery (`getConnectedComponent`) and directed cycle detection (`detectCycles`).
    - PII anonymizer (`anonymize`): scrubs sensitive identifiers while maintaining exact topology for auditing.
 
 3. **`validator.ts`**:
@@ -60,11 +63,20 @@ LifeGraph is a deterministic, portable entity and knowledge graph for personal p
 6. **`stats.ts`**:
    - Aggregate telemetry, node/edge distribution, visibility breakdown, and deadline summaries.
 
+7. **`audit.ts`**:
+   - Privacy hygiene and paperwork completeness audit engine.
+   - Flags public PII exposure, orphan paperwork, and unprotected document/contract expirations.
+   - Computes a health score (0–100%).
+
+8. **`merge.ts`**:
+   - Deterministic graph reconciler supporting multiple conflict resolution strategies (`prefer-newer`, `prefer-incoming`, `prefer-base`) and automated digest recomputation.
+
 ## Exporters (`src/exporters/`)
 
 - **Canonical JSON (`canonical-json.ts`)**: Lossless, sorted, deterministic serialization guaranteeing byte-identical round-trip import.
-- **JSON-LD (`jsonld.ts`)**: Semantic web interoperability conforming to Schema.org and W3C PROV-O provenance.
+- **W3C JSON-LD (`jsonld.ts`)**: Semantic web interoperability conforming to Schema.org and W3C PROV-O provenance.
 - **Markdown (`markdown.ts`)**: Complete dossier with an interactive Mermaid diagram rendering relationship topologies.
 - **iCalendar (`ical.ts`)**: Standard RFC 5545 calendar file with alerts for iOS, macOS, Android, Google Calendar, and Thunderbird.
-- **HTML (`html.ts`)**: Zero-dependency, responsive offline audit dashboard.
+- **HTML (`html.ts`)**: Zero-dependency, responsive offline audit dashboard with live client-side search.
+- **Graphviz DOT (`dot.ts`)**: Graphviz format with custom styling and node shaping.
 - **CSV (`csv.ts`)**: Tables for spreadsheet import.

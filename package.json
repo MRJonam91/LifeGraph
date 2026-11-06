@@ -1,6 +1,6 @@
 {
   "name": "lifegraph",
-  "version": "1.0.0",
+  "version": "1.1.0-alpha.1",
   "description": "Portable personal knowledge & entity graph: connect persons, documents, contracts, and deadlines with cryptographic provenance, fine-grained consent tags, and lossless export.",
   "type": "module",
   "license": "Apache-2.0",

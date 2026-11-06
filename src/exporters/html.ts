@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright 2026 Manoj Rollo (MRJonam91)
 
+import { auditLifeGraph } from '../core/audit.ts';
 import { getEvaluatedDeadlines } from '../core/deadlines.ts';
 import type { LifeGraph } from '../core/graph.ts';
 import { computeGraphStats } from '../core/stats.ts';
@@ -8,10 +9,13 @@ import { computeGraphStats } from '../core/stats.ts';
 export function exportHtml(graph: LifeGraph): string {
   const data = graph.toJSON();
   const stats = computeGraphStats(graph);
+  const audit = auditLifeGraph(graph);
   const deadlines = getEvaluatedDeadlines(graph, { daysAhead: 180, includeCompleted: true });
 
   const safeTitle = escapeHtml(data.title ?? 'LifeGraph Report');
   const safeDesc = escapeHtml(data.description ?? '');
+
+  const healthColor = audit.healthScore >= 80 ? 'var(--success)' : audit.healthScore >= 50 ? 'var(--warning)' : 'var(--danger)';
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -52,12 +56,14 @@ export function exportHtml(graph: LifeGraph): string {
     .stat-label { color: var(--text-muted); font-size: 0.875rem; text-transform: uppercase; font-weight: 600; }
     section { margin-bottom: 2.5rem; background: var(--card-bg); border: 1px solid var(--border); border-radius: 0.75rem; padding: 1.5rem; }
     h2 { font-size: 1.35rem; margin-bottom: 1.25rem; border-bottom: 1px solid var(--border); padding-bottom: 0.5rem; display: flex; align-items: center; justify-content: space-between; }
+    .search-input { width: 100%; padding: 0.75rem 1rem; background: #0f172a; border: 1px solid var(--border); border-radius: 0.5rem; color: #fff; margin-bottom: 1rem; font-size: 0.95rem; }
+    .search-input:focus { outline: none; border-color: var(--primary); }
     table { width: 100%; border-collapse: collapse; text-align: left; font-size: 0.9rem; }
     th { padding: 0.75rem; background: rgba(15, 23, 42, 0.6); color: var(--text-muted); border-bottom: 2px solid var(--border); font-weight: 600; }
     td { padding: 0.75rem; border-bottom: 1px solid var(--border); }
     tr:hover td { background: rgba(255, 255, 255, 0.02); }
     code { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; background: rgba(0,0,0,0.3); padding: 0.2rem 0.4rem; border-radius: 4px; font-size: 0.85em; }
-    .provenance-banner { background: rgba(56, 189, 248, 0.08); border: 1px solid rgba(56, 189, 248, 0.3); border-radius: 0.5rem; padding: 1rem; display: flex; align-items: center; gap: 1rem; margin-bottom: 2rem; }
+    .provenance-banner { background: rgba(56, 189, 248, 0.08); border: 1px solid rgba(56, 189, 248, 0.3); border-radius: 0.5rem; padding: 1rem; display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: 2rem; }
     .footer { text-align: center; color: var(--text-muted); font-size: 0.875rem; margin-top: 3rem; border-top: 1px solid var(--border); padding-top: 1.5rem; }
   </style>
 </head>
@@ -74,12 +80,18 @@ export function exportHtml(graph: LifeGraph): string {
     </header>
 
     <div class="provenance-banner">
-      <div style="font-size: 1.5rem;">🛡️</div>
-      <div>
-        <strong>Deterministic Personal Data Ledger</strong>
-        <div style="font-size: 0.85rem; color: var(--text-muted);">
-          All ${stats.totalNodes} entities and ${stats.totalEdges} relationships carry verifiable SHA-256 provenance hashes. Zero unverified claims.
+      <div style="display: flex; align-items: center; gap: 1rem;">
+        <div style="font-size: 1.8rem;">🛡️</div>
+        <div>
+          <strong>Deterministic Personal Data Ledger</strong>
+          <div style="font-size: 0.85rem; color: var(--text-muted);">
+            All ${stats.totalNodes} entities and ${stats.totalEdges} relationships carry verifiable SHA-256 provenance hashes.
+          </div>
         </div>
+      </div>
+      <div>
+        <div style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); text-align: right;">Health Score</div>
+        <div style="font-size: 1.5rem; font-weight: 800; color: ${healthColor}; text-align: right;">${audit.healthScore}%</div>
       </div>
     </div>
 
@@ -147,7 +159,8 @@ export function exportHtml(graph: LifeGraph): string {
 
     <section>
       <h2>📦 Entities Inventory (${stats.totalNodes})</h2>
-      <table>
+      <input type="text" id="entitySearch" class="search-input" placeholder="Filter entities by label, ID, type or consent purpose..." onkeyup="filterEntities()">
+      <table id="entitiesTable">
         <thead>
           <tr>
             <th>ID</th>
@@ -215,6 +228,16 @@ export function exportHtml(graph: LifeGraph): string {
         </tbody>
       </table>
     </section>
+
+    <script>
+      function filterEntities() {
+        const query = document.getElementById('entitySearch').value.toLowerCase();
+        const rows = document.querySelectorAll('#entitiesTable tbody tr');
+        rows.forEach(r => {
+          r.style.display = r.innerText.toLowerCase().includes(query) ? '' : 'none';
+        });
+      }
+    </script>
 
     <div class="footer">
       Generated deterministically by <a href="https://github.com/MRJonam91/LifeGraph" style="color: var(--primary); text-decoration: none;"><strong>LifeGraph</strong></a> &bull; Apache-2.0 License &bull; &copy; 2026 Manoj Rollo

@@ -191,3 +191,39 @@ export interface GraphStats {
   };
   provenanceSources: Record<string, number>;
 }
+
+export interface LineageResult {
+  targetNode: LifeGraphNode;
+  upstream: LifeGraphNode[];
+  downstream: LifeGraphNode[];
+  edges: LifeGraphEdge[];
+}
+
+export type AuditSeverity = 'critical' | 'warning' | 'info';
+
+export interface AuditIssue {
+  severity: AuditSeverity;
+  entityId?: string;
+  code: string;
+  message: string;
+  recommendation: string;
+}
+
+export interface AuditReport {
+  healthScore: number;
+  issues: AuditIssue[];
+  orphanCount: number;
+  unprotectedExpirationsCount: number;
+  privacyRiskCount: number;
+}
+
+export type MergeStrategy = 'prefer-newer' | 'prefer-incoming' | 'prefer-base';
+
+export interface MergeResult {
+  graph: LifeGraphData;
+  addedNodes: string[];
+  updatedNodes: string[];
+  skippedNodes: string[];
+  addedEdges: string[];
+  conflicts: Array<{ id: string; resolution: string; message: string }>;
+}

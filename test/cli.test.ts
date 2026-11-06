@@ -24,7 +24,7 @@ function runCliCmd(args: string[]): { stdout: string; status: number } {
 test('CLI - prints version and help', () => {
   const versionRes = runCliCmd(['--version']);
   assert.equal(versionRes.status, 0);
-  assert.ok(versionRes.stdout.includes('lifegraph v1.0.0'));
+  assert.ok(versionRes.stdout.includes('lifegraph v1.1.0-alpha.1'));
 
   const helpRes = runCliCmd(['--help']);
   assert.equal(helpRes.status, 0);
@@ -37,6 +37,46 @@ test('CLI - sponsor command prints donation links', () => {
   assert.ok(res.stdout.includes('Ko-fi'));
   assert.ok(res.stdout.includes('GitHub Sponsors'));
   assert.ok(res.stdout.includes('PayPal'));
+});
+
+test('CLI - audit, trace, merge, and dot export lifecycle', () => {
+  const tmpFileA = resolve(process.cwd(), 'temp-test-a.json');
+  const tmpFileB = resolve(process.cwd(), 'temp-test-b.json');
+  const tmpMerged = resolve(process.cwd(), 'temp-test-merged.json');
+  const tmpDot = resolve(process.cwd(), 'temp-test-graph.dot');
+
+  try {
+    // 1. Generate samples
+    runCliCmd(['sample', tmpFileA]);
+    runCliCmd(['sample', tmpFileB]);
+    assert.ok(existsSync(tmpFileA));
+
+    // 2. Audit
+    const auditRes = runCliCmd(['audit', tmpFileA, '--strict']);
+    assert.equal(auditRes.status, 0);
+    assert.ok(auditRes.stdout.includes('Health Score:'));
+
+    // 3. Trace lineage
+    const traceRes = runCliCmd(['trace', tmpFileA, 'ctr-rent-home']);
+    assert.equal(traceRes.status, 0);
+    assert.ok(traceRes.stdout.includes('Relational Lineage for:'));
+    assert.ok(traceRes.stdout.includes('Upstream Dependencies'));
+
+    // 4. Merge
+    const mergeRes = runCliCmd(['merge', tmpFileA, tmpFileB, '--strategy', 'prefer-newer', '--out', tmpMerged]);
+    assert.equal(mergeRes.status, 0);
+    assert.ok(existsSync(tmpMerged));
+
+    // 5. Export DOT
+    const dotRes = runCliCmd(['export', tmpFileA, '--format', 'dot', '--out', tmpDot]);
+    assert.equal(dotRes.status, 0);
+    assert.ok(existsSync(tmpDot));
+  } finally {
+    if (existsSync(tmpFileA)) unlinkSync(tmpFileA);
+    if (existsSync(tmpFileB)) unlinkSync(tmpFileB);
+    if (existsSync(tmpMerged)) unlinkSync(tmpMerged);
+    if (existsSync(tmpDot)) unlinkSync(tmpDot);
+  }
 });
 
 test('CLI - sample, validate, inspect, and export cycle', () => {

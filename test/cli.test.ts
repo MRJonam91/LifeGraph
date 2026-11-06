@@ -24,7 +24,7 @@ function runCliCmd(args: string[]): { stdout: string; status: number } {
 test('CLI - prints version and help', () => {
   const versionRes = runCliCmd(['--version']);
   assert.equal(versionRes.status, 0);
-  assert.ok(versionRes.stdout.includes('lifegraph v1.2.0-beta.1'));
+  assert.ok(versionRes.stdout.includes('lifegraph v1.0.0'));
 
   const helpRes = runCliCmd(['--help']);
   assert.equal(helpRes.status, 0);

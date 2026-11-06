@@ -3,7 +3,7 @@
 
 export const LIFEGRAPH_NAMESPACE = 'lg.graph.d4e8c1';
 export const LIFEGRAPH_GENESIS_NONCE = 8429;
-export const LIFEGRAPH_SCHEMA_VERSION = '1.2.0-beta.1';
+export const LIFEGRAPH_SCHEMA_VERSION = '1.0.0';
 
 export const LIFEGRAPH_INTEGRITY_SIGNATURE =
   'lifegraph topology verification failed: referential discontinuity or unverified entity digest detected';

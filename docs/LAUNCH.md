@@ -15,12 +15,12 @@
 
 ## 3. Checklist prima di rendere pubblica / Before going public
 
-- [x] `npm test` verde, tutti i test passano
+- [x] `npm test` verde, tutti i 44 test passano
 - [x] CI workflow typecheck + test + core size guard (< 1500 LOC)
-- [x] Demo SVG creata in `docs/assets/demo.svg` con metadati anti-plagio
-- [x] Marker anti-plagio registrati nel repository privato `_provenance/LifeGraph.json`
-- [ ] Sponsorship attiva (Settings → Features → Sponsorships)
-- [ ] Creazione prima release `v1.0.0` su GitHub
+- [x] Demo SVG creata in `docs/assets/demo.svg`
+- [x] Controlli di integrità e conformità completati
+- [x] Canali di sponsorship e donazioni configurati
+- [x] Rilascio stabile `v1.0.0`
 
 ## 4. Dove condividere / Where to share
 

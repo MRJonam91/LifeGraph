@@ -19,14 +19,14 @@ LifeGraph is a deterministic, portable entity and knowledge graph for personal p
                       │   - SHA-256 Tamper Detection           │
                       └───────────────────┬────────────────────┘
                                           │
-         ┌──────────────────┬─────────────┴──────┬──────────────────┐
-         │                  │                    │                  │
-         ▼                  ▼                    ▼                  ▼
-┌──────────────────┐┌──────────────────┐┌──────────────────┐┌──────────────────┐
-│  W3C JSON-LD     ││  Markdown &      ││  RFC 5545 iCal   ││  HTML, CSV &    │
-│  (Schema.org +   ││  Mermaid Graph   ││  (Native Sync +  ││  Graphviz DOT   │
-│  PROV-O Lineage) ││  Relationship)   ││  Calendar Alarm) ││  (Auditing)     │
-└──────────────────┘└──────────────────┘└──────────────────┘└──────────────────┘
+         ┌──────────────────┬─────────────┼──────────────────┬──────────────────┐
+         │                  │             │                  │                  │
+         ▼                  ▼             ▼                  ▼                  ▼
+┌──────────────────┐┌──────────────┐┌──────────────┐┌──────────────────┐┌──────────────────┐
+│  Security/Vault  ││  Financial   ││   Adapters   ││  W3C JSON-LD /   ││  HTML, CSV &     │
+│  AES-256-GCM     ││  Burn Rate & ││  vCard, CSV, ││  Markdown /      ││  Graphviz DOT    │
+│  Encryption      ││  Commitments ││  iCal Import ││  iCal Exporters  ││  Audit Dashboards│
+└──────────────────┘└──────────────┘└──────────────┘└──────────────────┘└──────────────────┘
 ```
 
 ## Core Modules (`src/core/`)
@@ -70,6 +70,24 @@ LifeGraph is a deterministic, portable entity and knowledge graph for personal p
 
 8. **`merge.ts`**:
    - Deterministic graph reconciler supporting multiple conflict resolution strategies (`prefer-newer`, `prefer-incoming`, `prefer-base`) and automated digest recomputation.
+
+## Security & Vault Sealing (`src/security/`)
+
+- **AES-256-GCM Vault Sealing (`vault.ts`)**:
+  - Offline local-first encryption using PBKDF2 (100,000 iterations, SHA-256) and AES-256-GCM authenticated cipher.
+  - Generates tamper-resistant sealed vaults (`lifegraph.sealed.json`) protecting confidential and private entities.
+
+## Financial & Cost Analytics (`src/analytics/`)
+
+- **Recurring Cost Engine (`costs.ts`)**:
+  - Normalizes billing cycles (monthly, quarterly, yearly, one_off).
+  - Calculates recurring monthly burn rates, annual fixed commitments, category totals, and top spend providers.
+
+## Universal Adapters (`src/adapters/`)
+
+- **vCard Ingestion (`vcard.ts`)**: Ingests vCard contacts into cryptographically verified `PersonNode`s.
+- **Subscriptions CSV (`subscriptions-csv.ts`)**: Imports bank statements and subscription exports into `ContractNode`s.
+- **iCalendar Import (`ical-import.ts`)**: Ingests calendar events into `DeadlineNode`s.
 
 ## Exporters (`src/exporters/`)
 

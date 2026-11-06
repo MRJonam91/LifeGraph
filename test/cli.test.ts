@@ -24,7 +24,7 @@ function runCliCmd(args: string[]): { stdout: string; status: number } {
 test('CLI - prints version and help', () => {
   const versionRes = runCliCmd(['--version']);
   assert.equal(versionRes.status, 0);
-  assert.ok(versionRes.stdout.includes('lifegraph v1.1.0-alpha.1'));
+  assert.ok(versionRes.stdout.includes('lifegraph v1.2.0-beta.1'));
 
   const helpRes = runCliCmd(['--help']);
   assert.equal(helpRes.status, 0);
@@ -37,6 +37,47 @@ test('CLI - sponsor command prints donation links', () => {
   assert.ok(res.stdout.includes('Ko-fi'));
   assert.ok(res.stdout.includes('GitHub Sponsors'));
   assert.ok(res.stdout.includes('PayPal'));
+});
+
+test('CLI - costs, seal, unseal, and import cycle', () => {
+  const tmpLedger = resolve(process.cwd(), 'temp-beta-ledger.json');
+  const tmpSealed = resolve(process.cwd(), 'temp-beta-vault.sealed.json');
+  const tmpUnsealed = resolve(process.cwd(), 'temp-beta-unsealed.json');
+  const tmpCsv = resolve(process.cwd(), 'temp-subscriptions.csv');
+  const tmpImported = resolve(process.cwd(), 'temp-imported.json');
+
+  try {
+    // 1. Generate sample
+    runCliCmd(['sample', tmpLedger]);
+
+    // 2. Costs analysis
+    const costsRes = runCliCmd(['costs', tmpLedger]);
+    assert.equal(costsRes.status, 0);
+    assert.ok(costsRes.stdout.includes('Monthly Recurring Burn:'));
+    assert.ok(costsRes.stdout.includes('Annual Fixed Commitments:'));
+
+    // 3. Seal vault
+    const sealRes = runCliCmd(['seal', tmpLedger, '--pass', 'Passphrase123!', '--out', tmpSealed]);
+    assert.equal(sealRes.status, 0);
+    assert.ok(existsSync(tmpSealed));
+
+    // 4. Unseal vault
+    const unsealRes = runCliCmd(['unseal', tmpSealed, '--pass', 'Passphrase123!', '--out', tmpUnsealed]);
+    assert.equal(unsealRes.status, 0);
+    assert.ok(existsSync(tmpUnsealed));
+
+    // 5. Import subscriptions CSV
+    writeFileSync(tmpCsv, 'provider,amount,cycle\nSpotify,10.99,monthly\n', 'utf-8');
+    const importRes = runCliCmd(['import', tmpCsv, '--format', 'csv', '--out', tmpImported]);
+    assert.equal(importRes.status, 0);
+    assert.ok(existsSync(tmpImported));
+  } finally {
+    if (existsSync(tmpLedger)) unlinkSync(tmpLedger);
+    if (existsSync(tmpSealed)) unlinkSync(tmpSealed);
+    if (existsSync(tmpUnsealed)) unlinkSync(tmpUnsealed);
+    if (existsSync(tmpCsv)) unlinkSync(tmpCsv);
+    if (existsSync(tmpImported)) unlinkSync(tmpImported);
+  }
 });
 
 test('CLI - audit, trace, merge, and dot export lifecycle', () => {

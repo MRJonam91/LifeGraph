@@ -17,6 +17,11 @@ import { getEvaluatedDeadlines } from '../core/deadlines.ts';
 import { computeGraphDiff } from '../core/diff.ts';
 import { auditLifeGraph } from '../core/audit.ts';
 import { mergeLifeGraphs } from '../core/merge.ts';
+import { computeCostAnalytics } from '../analytics/costs.ts';
+import { sealVault, unsealVault, type SealedVault } from '../security/vault.ts';
+import { importVCard } from '../adapters/vcard.ts';
+import { importSubscriptionsCsv } from '../adapters/subscriptions-csv.ts';
+import { importIcsDeadlines } from '../adapters/ical-import.ts';
 import { exportCanonicalJson, importCanonicalJson } from '../exporters/canonical-json.ts';
 import { exportJsonLd } from '../exporters/jsonld.ts';
 import { exportMarkdown } from '../exporters/markdown.ts';
@@ -40,24 +45,30 @@ COMMANDS:
   inspect <file>                 Show detailed summary and entity statistics
   stats <file>                   Alias for 'inspect'
   audit <file>                   Run privacy hygiene & paperwork completeness audit
+  costs <file>                   Calculate recurring burn rate & annual contract commitments
   trace <file> <nodeId>          Trace upstream and downstream dependency lineage
   deadlines <file> [--days N]    List impending and overdue deadlines (default: 60 days)
   query <file> [options]         Search entities by type, tag, or label keyword
   filter <file> --consent <p>    Export a consent-restricted subgraph
   anonymize <file> [--out <f>]   Sanitize PII while preserving relational topology
   merge <fileA> <fileB>          Reconcile & merge two LifeGraph ledgers
+  seal <file> --pass <pass>      Encrypt vault with AES-256-GCM local-first security
+  unseal <file> --pass <pass>    Decrypt sealed vault file
+  import <file> --format <fmt>   Import external records (vcard | csv | ics)
   export <file> --format <fmt>   Export to json, jsonld, markdown, ics, html, csv, or dot
   diff <fileA> <fileB>           Compare two LifeGraph snapshot files
   sponsor                        Show sponsorship and donation channels
 
 OPTIONS:
-  -f, --format <fmt>             Target export format: json | jsonld | markdown | ics | html | csv | dot
+  -f, --format <fmt>             Target export or import format: json | jsonld | markdown | ics | html | csv | dot | vcard
   -o, --out <path>               Write output to file instead of stdout
   -c, --consent <purpose>        Consent purpose filter (e.g. general_admin, tax_filing, banking_kyc)
   -t, --type <type>              Filter query by entity type: person | document | contract | deadline
   -s, --search <keyword>         Search query string
   -d, --days <number>            Lookahead days for deadlines (default: 60)
+  -p, --pass, --passphrase <pwd> Passphrase for sealing / unsealing vault
   --strategy <strategy>          Merge conflict strategy: prefer-newer | prefer-incoming | prefer-base
+  --into <targetLedger>          Target LifeGraph file to merge imported entities into
   --strict                       Exit with code 1 if audit warnings/critical issues exist
   --all                          Include completed/dismissed deadlines
   --no-digests                   Skip SHA-256 digest recalculation during validation
@@ -101,8 +112,12 @@ function parseArgs(args: string[]): {
       flags['search'] = args[++i] ?? '';
     } else if (arg === '-d' || arg === '--days') {
       flags['days'] = args[++i] ?? '';
+    } else if (arg === '-p' || arg === '--pass' || arg === '--passphrase') {
+      flags['passphrase'] = args[++i] ?? '';
     } else if (arg === '--strategy') {
       flags['strategy'] = args[++i] ?? '';
+    } else if (arg === '--into') {
+      flags['into'] = args[++i] ?? '';
     } else if (arg.startsWith('--')) {
       const key = arg.slice(2);
       flags[key] = true;
@@ -269,6 +284,131 @@ export function runCli(argv: string[] = process.argv.slice(2)): void {
       console.log(`  • Due Soon:  \x1b[33m${stats.deadlinesSummary.dueSoon}\x1b[0m`);
       console.log(`  • Upcoming:  ${stats.deadlinesSummary.upcoming}`);
       console.log(`  • Completed: \x1b[32m${stats.deadlinesSummary.completed}\x1b[0m`);
+      break;
+    }
+
+    case 'costs': {
+      const targetFile = positionals[0];
+      if (!targetFile) {
+        console.error('Usage: lifegraph costs <file.json>');
+        process.exit(1);
+      }
+      const graph = loadGraph(targetFile);
+      const costs = computeCostAnalytics(graph);
+
+      console.log(`\x1b[1m=== LifeGraph Financial & Recurring Cost Analysis ===\x1b[0m`);
+      console.log(`Active Contracts with Costs: ${costs.activeContractCount}`);
+      console.log(`Monthly Recurring Burn:      \x1b[33m${costs.totalMonthlyBurn} ${costs.currency}/mo\x1b[0m`);
+      console.log(`Annual Fixed Commitments:    \x1b[1m${costs.totalAnnualFixedCosts} ${costs.currency}/year\x1b[0m`);
+
+      console.log(`\nBreakdown by Category:`);
+      for (const [cat, data] of Object.entries(costs.byCategory)) {
+        console.log(`  • ${cat.padEnd(16)}: ${data.annualTotal} ${costs.currency}/yr (${data.percentage}% | ${data.count} contracts)`);
+      }
+
+      console.log(`\nTop Contracts by Spend:`);
+      for (const c of costs.contracts.slice(0, 5)) {
+        console.log(`  • ${c.label.padEnd(28)}: ${c.rawAmount} ${c.currency}/${c.cycle} (-> ${c.annualEquivalent} ${c.currency}/yr)`);
+      }
+      break;
+    }
+
+    case 'seal': {
+      const targetFile = positionals[0];
+      const passphrase = (flags['passphrase'] as string) || process.env['LIFEGRAPH_PASSPHRASE'];
+      if (!targetFile || !passphrase) {
+        console.error('Usage: lifegraph seal <file.json> --pass <passphrase> [--out <file.sealed.json>]');
+        process.exit(1);
+      }
+      const graph = loadGraph(targetFile);
+      const sealed = sealVault(graph, passphrase);
+      const outPath = (flags['out'] as string) || targetFile.replace(/\.json$/, '.sealed.json');
+      writeFileSync(resolve(process.cwd(), outPath), JSON.stringify(sealed, null, 2), 'utf-8');
+      console.log(`\x1b[32m🔒 Vault successfully encrypted with AES-256-GCM: ${outPath}\x1b[0m`);
+      break;
+    }
+
+    case 'unseal': {
+      const targetFile = positionals[0];
+      const passphrase = (flags['passphrase'] as string) || process.env['LIFEGRAPH_PASSPHRASE'];
+      if (!targetFile || !passphrase) {
+        console.error('Usage: lifegraph unseal <file.sealed.json> --pass <passphrase> [--out <file.json>]');
+        process.exit(1);
+      }
+      const absPath = resolve(process.cwd(), targetFile);
+      if (!existsSync(absPath)) {
+        console.error(`Error: File not found: ${targetFile}`);
+        process.exit(1);
+      }
+      const raw = readFileSync(absPath, 'utf-8');
+      let sealed: SealedVault;
+      try {
+        sealed = JSON.parse(raw);
+      } catch {
+        console.error('Invalid sealed vault JSON format.');
+        process.exit(1);
+      }
+      try {
+        const unsealedGraph = unsealVault(sealed, passphrase);
+        const canonical = exportCanonicalJson(unsealedGraph);
+        const outPath = (flags['out'] as string) || targetFile.replace(/\.sealed\.json$/, '.decrypted.json');
+        writeFileSync(resolve(process.cwd(), outPath), canonical, 'utf-8');
+        console.log(`\x1b[32m🔓 Vault successfully decrypted & verified: ${outPath}\x1b[0m`);
+      } catch (err) {
+        console.error(`\x1b[31m✖ ${(err as Error).message}\x1b[0m`);
+        process.exit(1);
+      }
+      break;
+    }
+
+    case 'import': {
+      const sourceFile = positionals[0];
+      const format = (flags['format'] as string)?.toLowerCase();
+      if (!sourceFile || !format) {
+        console.error('Usage: lifegraph import <file> --format <vcard|csv|ics> [--into <base.json>] [--out <dest.json>]');
+        process.exit(1);
+      }
+      const absPath = resolve(process.cwd(), sourceFile);
+      if (!existsSync(absPath)) {
+        console.error(`File not found: ${sourceFile}`);
+        process.exit(1);
+      }
+      const content = readFileSync(absPath, 'utf-8');
+
+      let targetGraph: LifeGraph;
+      if (flags['into'] && existsSync(resolve(process.cwd(), String(flags['into'])))) {
+        targetGraph = loadGraph(String(flags['into']));
+      } else {
+        targetGraph = LifeGraph.createEmpty(`Imported from ${sourceFile}`);
+      }
+
+      let importedCount = 0;
+      if (format === 'vcard' || format === 'vcf') {
+        const persons = importVCard(content);
+        for (const p of persons) {
+          targetGraph.addNode(p);
+          importedCount++;
+        }
+      } else if (format === 'csv') {
+        const contracts = importSubscriptionsCsv(content);
+        for (const c of contracts) {
+          targetGraph.addNode(c);
+          importedCount++;
+        }
+      } else if (format === 'ics' || format === 'ical') {
+        const deadlines = importIcsDeadlines(content);
+        for (const dl of deadlines) {
+          targetGraph.addNode(dl);
+          importedCount++;
+        }
+      } else {
+        console.error(`Unknown import format '${format}'. Available: vcard, csv, ics`);
+        process.exit(1);
+      }
+
+      console.log(`\x1b[32m✔ Successfully imported ${importedCount} entity/entities from ${sourceFile}\x1b[0m`);
+      const canonical = exportCanonicalJson(targetGraph);
+      writeOutput(canonical, flags['out'] as string | undefined);
       break;
     }
 

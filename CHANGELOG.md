@@ -6,6 +6,25 @@ Il formato è basato su [Keep a Changelog](https://keepachangelog.com/it/1.1.0/)
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.2.0-beta.1] - 2026-11-06
+
+### Added
+- **Local-First Vault Encryption (`src/security/vault.ts`)**:
+  - `sealVault`: Authenticated encryption using AES-256-GCM and PBKDF2 (100,000 iterations, SHA-256) with tamper detection.
+  - `unsealVault`: Verifies authentication tag and decrypts canonical ledger.
+- **Financial & Recurring Cost Analytics (`src/analytics/costs.ts`)**:
+  - `computeCostAnalytics`: Calculates monthly recurring burn rate, annual fixed commitments, and category breakdowns.
+- **External Data Import Adapters (`src/adapters/`)**:
+  - `importVCard`: Ingests vCard 3.0 contacts into `PersonNode`s with computed SHA-256 digests.
+  - `importSubscriptionsCsv`: Ingests CSV bank statements/subscriptions into `ContractNode`s.
+  - `importIcsDeadlines`: Ingests RFC 5545 `.ics` events into `DeadlineNode`s.
+- **New Beta CLI Commands**:
+  - `lifegraph costs <file>`: Financial commitment breakdown.
+  - `lifegraph seal <file> --pass <pwd>` / `lifegraph unseal <file> --pass <pwd>`: Vault encryption & decryption.
+  - `lifegraph import <file> --format <vcard|csv|ics>`: Data import.
+- **Comprehensive Test Suite**:
+  - 44 tests across 12 suites covering security, analytics, adapters, graph traversal, and CLI commands.
+
 ## [1.1.0-alpha.1] - 2026-11-06
 
 ### Added

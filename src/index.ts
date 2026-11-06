@@ -12,6 +12,13 @@ export * from './core/stats.ts';
 export * from './core/audit.ts';
 export * from './core/merge.ts';
 
+export * from './analytics/costs.ts';
+export * from './security/vault.ts';
+
+export * from './adapters/vcard.ts';
+export * from './adapters/subscriptions-csv.ts';
+export * from './adapters/ical-import.ts';
+
 export * from './exporters/canonical-json.ts';
 export * from './exporters/jsonld.ts';
 export * from './exporters/markdown.ts';
